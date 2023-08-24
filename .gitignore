@@ -8,6 +8,9 @@
 *.rules
 *.pcap
 *.pcapng
+GPATH
+GRTAGS
+GTAGS
 /*.yaml
 Makefile
 .deps/
