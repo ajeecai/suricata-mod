@@ -33,6 +33,7 @@ doc/userguide/suricata.1
 etc/suricata.logrotate
 etc/suricata.service
 install-sh
+libhtp/*
 libhtp/TAGS
 libhtp/aclocal.m4
 libhtp/autom4te.cache/
