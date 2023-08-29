@@ -79,7 +79,9 @@
 
 #include "source-pcap-file.h"
 #include "action-globals.h"
-
+#ifdef SSL_INSPECT
+#include "ff_api.h"
+#endif
 //#define DEBUG
 
 #define STREAMTCP_DEFAULT_PREALLOC              2048
@@ -1163,7 +1165,9 @@ static int StreamTcpPacketStateNone(
                 StatsIncr(tv, stt->counter_tcp_ssn_memcap);
                 return -1;
             }
-
+#ifdef SSL_INSPECT                
+            ssn->sync_pkt = ff_clone_mbuf(p->dpdk_v.mbuf);
+#endif
             StatsIncr(tv, stt->counter_tcp_sessions);
             StatsIncr(tv, stt->counter_tcp_active_sessions);
         }

@@ -49,6 +49,12 @@
 #include "app-layer-htp-mem.h"
 #include "util-exception-policy.h"
 
+#ifdef SSL_INSPECT
+#include "ff_api.h"
+#include <rte_ether.h>
+#include <rte_ip.h>
+#endif
+
 /**
  * \brief This is for the app layer in general and it contains per thread
  *        context relevant to both the alpd and alp.
@@ -331,7 +337,30 @@ static int TCPProtoDetectTriggerOpposingSide(ThreadVars *tv, TcpReassemblyThread
             opposing_stream, p, dir);
     return ret;
 }
+#ifdef SSL_INSPECT
+/*implemented according with RFC 1071 and1141*/
+static inline uint16_t csum_incremental_update(
+        uint16_t old_csum, void *old_field_addr, void *new_field_addr, int bytes)
 
+{
+    uint16_t *old_field_one_byte = (uint16_t *)old_field_addr;
+    uint16_t *new_field_one_byte = (uint16_t *)new_field_addr;
+
+    uint32_t csum = 0;
+    while (bytes > 0) {
+        csum = (~old_csum & 0xFFFF) + (~(*old_field_one_byte) & 0xFFFF) + *new_field_one_byte;
+        csum = (csum >> 16) + (csum & 0xFFFF);
+        csum += (csum >> 16);
+        old_csum = csum = ~csum;
+
+        bytes--;
+        old_field_one_byte++;
+        new_field_one_byte++;
+    }
+
+    return csum;
+}
+#endif
 extern enum ExceptionPolicy g_applayerparser_error_policy;
 
 /** \todo data const
@@ -392,6 +421,43 @@ static int TCPProtoDetect(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
             }
         } else {
             f->alproto = *alproto;
+#ifdef SSL_INSPECT
+            if (*alproto == ALPROTO_TLS) {
+                // generating a syn to f-stack, TODO: IPv4 only
+                TcpSession *ssn = (TcpSession *)p->flow->protoctx;
+                uint32_t iface_ip = ff_get_ip_from_port(ssn->sync_pkt->port);
+                uint32_t old_dst_ip;
+                uint16_t old_cksum, old_dst_port, new_cksum;
+
+                struct rte_ether_hdr *eth_hdr =
+                        rte_pktmbuf_mtod(ssn->sync_pkt, struct rte_ether_hdr *);
+                struct rte_ipv4_hdr *ip_hdr =
+                        (struct rte_ipv4_hdr *)((char *)eth_hdr + sizeof(struct rte_ether_hdr));
+                uint8_t ihl =
+                        ip_hdr->version_ihl &
+                        0x0F; // get the IHL value from the lower 4 bits of the version_ihl field
+                struct rte_tcp_hdr *tcp_hdr =
+                        (struct rte_tcp_hdr *)((char *)ip_hdr + ihl * 4); // get the pointer
+
+                // update IP Hdr checksum
+                old_dst_ip = ip_hdr->dst_addr;
+                old_cksum = ip_hdr->hdr_checksum;
+                ip_hdr->dst_addr = iface_ip;
+                new_cksum = csum_incremental_update(old_cksum, &old_dst_ip, &ip_hdr->dst_addr, 2);
+                ip_hdr->hdr_checksum = new_cksum;
+
+                // update TCP Hdr checksum
+                old_cksum = tcp_hdr->cksum;
+                old_cksum = csum_incremental_update(old_cksum, &old_dst_ip, &ip_hdr->dst_addr, 2);
+                old_dst_port = tcp_hdr->dst_port;
+                tcp_hdr->dst_port = 8443;
+                new_cksum =
+                        csum_incremental_update(old_cksum, &old_dst_port, &tcp_hdr->dst_port, 1);
+                tcp_hdr->cksum = new_cksum;
+
+                ff_input(ssn->sync_pkt);
+            }
+#endif
         }
 
         StreamTcpSetStreamFlagAppProtoDetectionCompleted(*stream);

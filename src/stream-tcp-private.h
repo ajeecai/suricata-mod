@@ -294,6 +294,9 @@ typedef struct TcpSession_ {
     TcpStream server;
     TcpStream client;
     TcpStateQueue *queue;                   /**< list of SYN/ACK candidates */
+#ifdef SSL_INSPECT
+    struct rte_mbuf *sync_pkt; /* ajee: need to free this mbuf or not ? */
+#endif
 } TcpSession;
 
 #define StreamTcpSetStreamFlagAppProtoDetectionCompleted(stream) \

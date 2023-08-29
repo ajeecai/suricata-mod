@@ -142,7 +142,9 @@
 #include "util-signal.h"
 #include "util-time.h"
 #include "util-validate.h"
-
+#ifdef SSL_INSPECT    
+#include <ff_api.h>
+#endif
 #ifdef WINDIVERT
 #include "decode-sll.h"
 #include "win32-syscall.h"
@@ -3043,6 +3045,9 @@ int SuricataMain(int argc, char **argv)
     OnNotifyRunning();
 
     PostRunStartedDetectSetup(&suricata);
+#ifdef SSL_INSPECT    
+    ff_init_for_sc(1, &argv[1]);
+#endif    
 
     SCPledge();
     SuricataMainLoop(&suricata);
