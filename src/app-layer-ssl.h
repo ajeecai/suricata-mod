@@ -301,6 +301,9 @@ typedef struct SSLState_ {
 
     SSLStateConnp client_connp;
     SSLStateConnp server_connp;
+#ifdef SSL_INSPECT
+    int si_state;
+#endif    
 } SSLState;
 
 void RegisterSSLParsers(void);

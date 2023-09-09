@@ -51,8 +51,12 @@
 
 #ifdef SSL_INSPECT
 #include "ff_api.h"
+#include "app-layer-ssl.h"
 #include <rte_ether.h>
 #include <rte_ip.h>
+#include <rte_mbuf_dyn.h>
+
+int sc_hook(Flow *f, struct rte_mbuf *pkt);
 #endif
 
 /**
@@ -360,6 +364,16 @@ static inline uint16_t csum_incremental_update(
 
     return csum;
 }
+
+int sc_hook(Flow *f, struct rte_mbuf *pkt)
+{
+    struct SSLState *ssl_state = (struct SSLState *)f->alstate;
+    if (ssl_state == 0) {
+        // first time
+        return -1;
+    }
+    return 0;
+}
 #endif
 extern enum ExceptionPolicy g_applayerparser_error_policy;
 
@@ -450,10 +464,12 @@ static int TCPProtoDetect(ThreadVars *tv, TcpReassemblyThreadCtx *ra_ctx,
                 old_cksum = tcp_hdr->cksum;
                 old_cksum = csum_incremental_update(old_cksum, &old_dst_ip, &ip_hdr->dst_addr, 2);
                 old_dst_port = tcp_hdr->dst_port;
-                tcp_hdr->dst_port = 8443;
+                tcp_hdr->dst_port = htons(8443); // TODO: not hardcode
                 new_cksum =
                         csum_incremental_update(old_cksum, &old_dst_port, &tcp_hdr->dst_port, 1);
                 tcp_hdr->cksum = new_cksum;
+                Flow **flow_addr = RTE_MBUF_DYNFIELD(ssn->sync_pkt, flow_offset, Flow **);
+                *flow_addr = f;
 
                 ff_input(ssn->sync_pkt);
             }

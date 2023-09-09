@@ -169,6 +169,11 @@ typedef struct SCInstance_ {
 /* memset to zeros, and mutex init! */
 void GlobalsInitPreConfig(void);
 
+#if SSL_INSPECT
+extern int flow_offset;
+extern __thread struct thread *pcurthread;
+
+#endif
 extern volatile uint8_t suricata_ctl_flags;
 extern int g_disable_randomness;
 extern uint16_t g_vlan_mask;
